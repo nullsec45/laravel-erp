@@ -72,18 +72,22 @@ class AdminPanelProvider extends PanelProvider
                 \Modules\Purchasing\Resources\PurchaseOrderResource::class,
 
                 // Logistics Module
-                \Modules\Logistics\Filament\Resources\LogisticResource::class,
+                \Modules\Logistic\Filament\Resources\VehicleResource::class,
+                \Modules\Logistic\Filament\Resources\DeliveryOrderResource::class,
+                \Modules\Logistic\Filament\Resources\RoutePlanningResource::class,
+                \Modules\Logistic\Filament\Resources\DriverResource::class,
+                \Modules\Logistic\Filament\Resources\ShipmentResource::class,
+                \Modules\Logistic\Filament\Resources\TrackingEventResource::class,
+
             ])
             ->navigationGroups([
                 'Dashboard',
                 'Sales',
                 'Purchasing',
                 'Inventory',
-                'Finance',
                 'HR',
-                'CRM',
-                'Reports',
                 'System',
+                'Logistic'
             ])
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
