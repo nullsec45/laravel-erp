@@ -1,0 +1,7 @@
+{
+    "name": "Sales",
+    "description": "The Sales module",
+    "version": "1.0.0",
+    "enabled": true,
+    "dependencies": []
+}
