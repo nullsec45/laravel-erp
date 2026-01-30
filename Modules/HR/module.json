@@ -1,0 +1,7 @@
+{
+    "name": "HR",
+    "description": "The HR module",
+    "version": "1.0.0",
+    "enabled": true,
+    "dependencies": []
+}
