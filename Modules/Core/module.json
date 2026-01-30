@@ -1,0 +1,7 @@
+{
+    "name": "Core",
+    "description": "The Core module",
+    "version": "1.0.0",
+    "enabled": true,
+    "dependencies": []
+}
