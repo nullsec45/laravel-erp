@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 class ERPStatsOverview extends BaseWidget
 {
     protected static ?int $sort = 1;
-    
+
     protected function getStats(): array
     {
         // Calculate total sales (current month)
@@ -30,10 +30,7 @@ class ERPStatsOverview extends BaseWidget
         $stockValue = Product::join('stock_levels', 'products.id', '=', 'stock_levels.product_id')
             ->sum(DB::raw('products.selling_price * stock_levels.quantity'));
 
-        // Get cash balance (from Finance module)
-        $cashBalance = Account::where('code', '1000')
-            ->first()
-            ?->balance ?? 0;
+
 
         // Count active employees
         $employeeCount = Employee::where('status', 'active')->count();
@@ -61,10 +58,7 @@ class ERPStatsOverview extends BaseWidget
                 ->descriptionIcon('heroicon-m-cube')
                 ->color('primary'),
 
-            Stat::make('Cash Balance', 'Rp ' . number_format($cashBalance, 0, ',', '.'))
-                ->description('Current cash position')
-                ->descriptionIcon('heroicon-m-wallet')
-                ->color($cashBalance > 0 ? 'success' : 'danger'),
+
 
             Stat::make('Active Employees', $employeeCount)
                 ->description('Total active staff')
