@@ -1,0 +1,7 @@
+{
+    "name": "Inventory",
+    "description": "The Inventory module",
+    "version": "1.0.0",
+    "enabled": true,
+    "dependencies": []
+}
