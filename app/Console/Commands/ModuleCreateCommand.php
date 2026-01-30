@@ -8,350 +8,212 @@ use Illuminate\Support\Str;
 
 class ModuleCreateCommand extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'module:create {name : The name of the module}';
+    protected $signature = 'module:create 
+        {name : Module name} 
+        {--submodule= : Resource / Submodule name (required)}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Create a new module';
+    protected $description = 'Create model and filament resource inside a module';
 
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
-        $name = $this->argument('name');
-        $moduleName = Str::studly($name);
-        $modulePath = base_path("modules/{$moduleName}");
+        $module = Str::studly($this->argument('name'));
+        $resource = Str::studly($this->option('submodule'));
 
-        if (File::exists($modulePath)) {
-            $this->error("Module {$moduleName} already exists!");
+        if (!$resource) {
+            $this->error('Submodule is required. Example: --submodule=DeliveryOrder');
             return 1;
         }
 
-        $this->info("Creating module: {$moduleName}");
+        $modulePath = base_path("Modules/{$module}");
 
-        // Create module directory structure
-        $directories = [
-            'Http/Controllers',
-            'Models',
-            'Filament/Resources',
-            'Providers',
-            'routes',
-            'resources/views',
-        ];
+        $modelPath = "{$modulePath}/Models/{$resource}.php";
+        $resourcePath = "{$modulePath}/Filament/Resources/{$resource}Resource.php";
 
-        foreach ($directories as $directory) {
-            File::makeDirectory("{$modulePath}/{$directory}", 0755, true);
+        if (File::exists($modelPath) || File::exists($resourcePath)) {
+            $this->error("{$resource} already exists in module {$module}");
+            return 1;
         }
 
-        // Create module.json
-        $moduleConfig = [
-            'name' => $moduleName,
-            'description' => "The {$moduleName} module",
-            'version' => '1.0.0',
-            'enabled' => true,
-            'dependencies' => []
-        ];
+        // Directories
+        File::ensureDirectoryExists("{$modulePath}/Models");
+        File::ensureDirectoryExists("{$modulePath}/Filament/Resources/{$resource}Resource/Pages");
 
-        File::put(
-            "{$modulePath}/module.json",
-            json_encode($moduleConfig, JSON_PRETTY_PRINT)
-        );
+        if (File::exists("{$modulePath}/Models/{$resource}.php")) {
+            $this->error("Model {$resource} already exists.");
+            return 1;
+        }
 
-        // Create module service provider
-        $this->createServiceProvider($modulePath, $moduleName);
+        $this->createModel($modulePath, $module, $resource);
+        $this->createFilamentResource($modulePath, $module, $resource);
 
-        // Create routes files
-        $this->createRoutes($modulePath, $moduleName);
-
-        // Create example model
-        $this->createExampleModel($modulePath, $moduleName);
-
-        // Create example controller
-        $this->createExampleController($modulePath, $moduleName);
-
-        // Create example Filament resource
-        $this->createExampleFilamentResource($modulePath, $moduleName);
-
-        $this->info("Module {$moduleName} created successfully!");
-        $this->info("Run 'composer dump-autoload' to register the new module.");
-
+        $this->info("✔ {$resource} successfully created in module {$module}");
         return 0;
     }
 
-    private function createServiceProvider($modulePath, $moduleName)
+    private function createModel(string $modulePath, string $module, string $resource): void
     {
-        $content = "<?php
+        File::put(
+            "{$modulePath}/Models/{$resource}.php",
+            "<?php
 
-        namespace Modules\\{$moduleName}\\Providers;
+namespace Modules\\{$module}\\Models;
 
-        use Illuminate\Support\ServiceProvider;
-        use Illuminate\Support\Facades\Route;
+use Illuminate\\Database\\Eloquent\\Model;
+use Illuminate\\Database\\Eloquent\\Factories\\HasFactory;
 
-        class {$moduleName}ServiceProvider extends ServiceProvider
-        {
-            /**
-             * Register any application services.
-             */
-            public function register(): void
-            {
-                //
-            }
+class {$resource} extends Model
+{
+    use HasFactory;
 
-            /**
-             * Bootstrap any application services.
-             */
-            public function boot(): void
-            {
-                \$this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
-                \$this->loadViewsFrom(__DIR__ . '/../resources/views', '" . strtolower($moduleName) . "');
-                \$this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
-            }
-        }";
+    protected \$fillable = [
+        'name',
+        'description',
+        'status',
+    ];
 
-        File::put("{$modulePath}/Providers/{$moduleName}ServiceProvider.php", $content);
+    protected \$casts = [
+        'status' => 'boolean',
+    ];
+}
+"
+        );
     }
 
-    private function createRoutes($modulePath, $moduleName)
+    private function createFilamentResource(string $modulePath, string $module, string $resource): void
     {
-        $webContent = "
-        <?php
+        $base = "{$modulePath}/Filament/Resources";
 
-        use Illuminate\\Support\\Facades\\Route;
-        use Modules\\{$moduleName}\\Http\\Controllers\\{$moduleName}Controller;
+        File::put(
+            "{$base}/{$resource}Resource.php",
+            $this->filamentResourceStub($module, $resource)
+        );
 
-        Route::middleware(['auth'])->group(function () {
-            Route::get('/{$moduleName}', [{$moduleName}Controller::class, 'index'])->name('" . strtolower($moduleName) . ".index');
-        });";
+        File::put(
+            "{$base}/{$resource}Resource/Pages/List{$resource}s.php",
+            $this->listPageStub($module, $resource)
+        );
 
-        File::put("{$modulePath}/routes/web.php", $webContent);
+        File::put(
+            "{$base}/{$resource}Resource/Pages/Create{$resource}.php",
+            $this->createPageStub($module, $resource)
+        );
+
+        File::put(
+            "{$base}/{$resource}Resource/Pages/Edit{$resource}.php",
+            $this->editPageStub($module, $resource)
+        );
     }
 
-    private function createExampleModel($modulePath, $moduleName)
+    private function filamentResourceStub(string $module, string $resource): string
     {
-        $modelName = Str::singular($moduleName);
-        $content = "
-                <?php
+        return "<?php
 
-                namespace Modules\\{$moduleName}\\Models;
+namespace Modules\\{$module}\\Filament\\Resources;
 
-                use Illuminate\\Database\\Eloquent\\Factories\\HasFactory;
-                use Illuminate\\Database\\Eloquent\\Model;
+use Modules\\{$module}\\Models\\{$resource};
+use Filament\\Resources\\Resource;
+use Filament\\Forms;
+use Filament\\Tables;
+use Filament\\Forms\\Form;
+use Filament\\Tables\\Table;
+use Modules\\{$module}\\Filament\\Resources\\{$resource}Resource\\Pages;
 
-                class {$modelName} extends Model
-                {
-                    use HasFactory;
+class {$resource}Resource extends Resource
+{
+    protected static ?string \$model = {$resource}::class;
+    protected static ?string \$navigationGroup = '{$module}';
+    protected static ?string \$navigationIcon = 'heroicon-o-rectangle-stack';
 
-                    protected \$fillable = [
-                        'name',
-                        'description',
-                        'status',
-                    ];
-
-                    protected \$casts = [
-                        'status' => 'boolean',
-                    ];
-                }
-        ";
-
-        File::put("{$modulePath}/Models/{$modelName}.php", $content);
+    public static function form(Form \$form): Form
+    {
+        return \$form->schema([
+            Forms\\Components\\TextInput::make('name')->required(),
+            Forms\\Components\\Textarea::make('description'),
+            Forms\\Components\\Toggle::make('status'),
+        ]);
     }
 
-    private function createExampleController($modulePath, $moduleName)
+    public static function table(Table \$table): Table
     {
-        $content = "
-            <?php
-
-            namespace Modules\\{$moduleName}\\Http\\Controllers;
-
-            use App\\Http\\Controllers\\Controller;
-            use Illuminate\\Http\\Request;
-
-            class {$moduleName}Controller extends Controller
-            {
-                public function index()
-                {
-                    return view('" . strtolower($moduleName) . "::index');
-                }
-            }
-        ";
-
-        File::put("{$modulePath}/Http/Controllers/{$moduleName}Controller.php", $content);
+        return \$table->columns([
+            Tables\\Columns\\TextColumn::make('name')->searchable(),
+            Tables\\Columns\\IconColumn::make('status')->boolean(),
+        ]);
     }
 
-    private function createExampleFilamentResource($modulePath, $moduleName)
+    public static function getPages(): array
     {
-        $modelName = Str::singular($moduleName);
-        $content = "
-            <?php
-
-            namespace Modules\\{$moduleName}\\Filament\\Resources;
-
-            use Modules\\{$moduleName}\\Models\\{$modelName};
-            use Filament\\Forms;
-            use Filament\\Forms\\Form;
-            use Filament\\Resources\\Resource;
-            use Filament\\Tables;
-            use Filament\\Tables\\Table;
-            use Modules\\{$moduleName}\\Filament\\Resources\\{$modelName}Resource\\Pages;
-
-            class {$modelName}Resource extends Resource
-            {
-                protected static ?string \$model = {$modelName}::class;
-
-                protected static ?string \$navigationIcon = 'heroicon-o-rectangle-stack';
-                
-                protected static ?string \$navigationGroup = '{$moduleName}';
-
-                public static function form(Form \$form): Form
-                {
-                    return \$form
-                        ->schema([
-                            Forms\\Components\\TextInput::make('name')
-                                ->required()
-                                ->maxLength(255),
-                            Forms\\Components\\Textarea::make('description')
-                                ->maxLength(65535)
-                                ->columnSpanFull(),
-                            Forms\\Components\\Toggle::make('status')
-                                ->required(),
-                        ]);
-                }
-
-                public static function table(Table \$table): Table
-                {
-                    return \$table
-                        ->columns([
-                            Tables\\Columns\\TextColumn::make('name')
-                                ->searchable(),
-                            Tables\\Columns\\TextColumn::make('description')
-                                ->limit(50),
-                            Tables\\Columns\\IconColumn::make('status')
-                                ->boolean(),
-                            Tables\\Columns\\TextColumn::make('created_at')
-                                ->dateTime()
-                                ->sortable()
-                                ->toggleable(isToggledHiddenByDefault: true),
-                            Tables\\Columns\\TextColumn::make('updated_at')
-                                ->dateTime()
-                                ->sortable()
-                                ->toggleable(isToggledHiddenByDefault: true),
-                        ])
-                        ->filters([
-                            //
-                        ])
-                        ->actions([
-                            Tables\\Actions\\EditAction::make(),
-                            Tables\\Actions\\DeleteAction::make(),
-                        ])
-                        ->bulkActions([
-                            Tables\\Actions\\BulkActionGroup::make([
-                                Tables\\Actions\\DeleteBulkAction::make(),
-                            ]),
-                        ])
-                        ->emptyStateActions([
-                            Tables\\Actions\\CreateAction::make(),
-                        ]);
-                }
-
-                public static function getRelations(): array
-                {
-                    return [
-                        //
-                    ];
-                }
-
-                public static function getPages(): array
-                {
-                    return [
-                        'index' => Pages\\List{$modelName}s::route('/'),
-                        'create' => Pages\\Create{$modelName}::route('/create'),
-                        'edit' => Pages\\Edit{$modelName}::route('/{record}/edit'),
-                    ];
-                }
-            }
-        ";
-
-        File::put("{$modulePath}/Filament/Resources/{$modelName}Resource.php", $content);
-
-        // Create resource pages directory and files
-        File::makeDirectory("{$modulePath}/Filament/Resources/{$modelName}Resource/Pages", 0755, true);
-
-        $this->createFilamentPages($modulePath, $moduleName, $modelName);
+        return [
+            'index' => Pages\\List{$resource}s::route('/'),
+            'create' => Pages\\Create{$resource}::route('/create'),
+            'edit' => Pages\\Edit{$resource}::route('/{record}/edit'),
+        ];
+    }
+}
+";
     }
 
-    private function createFilamentPages($modulePath, $moduleName, $modelName)
+    private function listPageStub(string $module, string $resource): string
     {
-        // Create List page
-        $listContent = "
-            <?php
+        return "<?php
 
-            namespace Modules\\{$moduleName}\\Filament\\Resources\\{$modelName}Resource\\Pages;
+namespace Modules\\{$module}\\Filament\\Resources\\{$resource}Resource\\Pages;
 
-            use Modules\\{$moduleName}\\Filament\\Resources\\{$modelName}Resource;
-            use Filament\\Actions;
-            use Filament\\Resources\\Pages\\ListRecords;
+use Modules\\{$module}\\Filament\\Resources\\{$resource}Resource;
+use Filament\\Resources\\Pages\\ListRecords;
+use Filament\\Actions;
 
-            class List{$modelName}s extends ListRecords
-            {
-                protected static string \$resource = {$modelName}Resource::class;
+class List{$resource}s extends ListRecords
+{
+    protected static string \$resource = {$resource}Resource::class;
 
-                protected function getHeaderActions(): array
-                {
-                    return [
-                        Actions\\CreateAction::make(),
-                    ];
-                }
-            }";
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\\CreateAction::make(),
+        ];
+    }
+}
+";
+    }
 
-        File::put("{$modulePath}/Filament/Resources/{$modelName}Resource/Pages/List{$modelName}s.php", $listContent);
+    private function createPageStub(string $module, string $resource): string
+    {
+        return "<?php
 
-        // Create Create page
-        $createContent = "<?php
+namespace Modules\\{$module}\\Filament\\Resources\\{$resource}Resource\\Pages;
 
-            namespace Modules\\{$moduleName}\\Filament\\Resources\\{$modelName}Resource\\Pages;
+use Modules\\{$module}\\Filament\\Resources\\{$resource}Resource;
+use Filament\\Resources\\Pages\\CreateRecord;
 
-            use Modules\\{$moduleName}\\Filament\\Resources\\{$modelName}Resource;
-            use Filament\\Actions;
-            use Filament\\Resources\\Pages\\CreateRecord;
+class Create{$resource} extends CreateRecord
+{
+    protected static string \$resource = {$resource}Resource::class;
+}
+";
+    }
 
-            class Create{$modelName} extends CreateRecord
-            {
-                protected static string \$resource = {$modelName}Resource::class;
-            }";
+    private function editPageStub(string $module, string $resource): string
+    {
+        return "<?php
 
-        File::put("{$modulePath}/Filament/Resources/{$modelName}Resource/Pages/Create{$modelName}.php", $createContent);
+namespace Modules\\{$module}\\Filament\\Resources\\{$resource}Resource\\Pages;
 
-        // Create Edit page
-        $editContent = "<?php
+use Modules\\{$module}\\Filament\\Resources\\{$resource}Resource;
+use Filament\\Resources\\Pages\\EditRecord;
+use Filament\\Actions;
 
-            namespace Modules\\{$moduleName}\\Filament\\Resources\\{$modelName}Resource\\Pages;
+class Edit{$resource} extends EditRecord
+{
+    protected static string \$resource = {$resource}Resource::class;
 
-            use Modules\\{$moduleName}\\Filament\\Resources\\{$modelName}Resource;
-            use Filament\\Actions;
-            use Filament\\Resources\\Pages\\EditRecord;
-
-            class Edit{$modelName} extends EditRecord
-            {
-                protected static string \$resource = {$modelName}Resource::class;
-
-                protected function getHeaderActions(): array
-                {
-                    return [
-                        Actions\\DeleteAction::make(),
-                    ];
-                }
-            }
-        ";
-
-        File::put("{$modulePath}/Filament/Resources/{$modelName}Resource/Pages/Edit{$modelName}.php", $editContent);
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\\DeleteAction::make(),
+        ];
+    }
+}
+";
     }
 }
