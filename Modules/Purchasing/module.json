@@ -1,0 +1,7 @@
+{
+    "name": "Purchasing",
+    "description": "The Purchasing module",
+    "version": "1.0.0",
+    "enabled": true,
+    "dependencies": []
+}
